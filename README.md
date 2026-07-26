@@ -72,11 +72,18 @@ python3 fisch_macro.py --exit-key esc
 python3 fisch_macro.py --shake-min-pixels 12 --hold-scale 1.0
 ```
 
+
 - `--shake-min-pixels` (default 12): minimum matched white pixels before a
   shake-button detection counts. If the macro seems "stuck" doing nothing
-  and never re-casts, raise this, it likely means something else in the
+  and never re-casts, raise this — it likely means something else in the
   shake region (glare, UI text) is matching white and keeps resetting the
   fail-safe timer forever. If real shakes are being missed, lower it.
+  **Camera angle matters here too**: color matching can't distinguish a
+  real shake button from a gray rock/object of similar color sitting in the
+  background. Pointing the camera at something low-contrast and non-gray
+  (water works well) instead of gray terrain/objects reduces false
+  positives significantly, on top of whatever `--shake-min-pixels` you're
+  using.
 - `--hold-scale` (default 1.0): multiplier on every minigame hold duration.
   On low-Control rods, even the shortest possible pulse can overshoot a
   narrow target zone, so the bar oscillates instead of converging. Try
