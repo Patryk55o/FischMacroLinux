@@ -75,7 +75,7 @@ python3 fisch_macro.py --shake-min-pixels 12 --hold-scale 1.0
 
 - `--shake-min-pixels` (default 12): minimum matched white pixels before a
   shake-button detection counts. If the macro seems "stuck" doing nothing
-  and never re-casts, raise this — it likely means something else in the
+  and never re-casts, raise this, it likely means something else in the
   shake region (glare, UI text) is matching white and keeps resetting the
   fail-safe timer forever. If real shakes are being missed, lower it.
   **Camera angle matters here too**: color matching can't distinguish a
