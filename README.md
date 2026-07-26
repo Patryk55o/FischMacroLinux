@@ -1,3 +1,9 @@
+<h3>
+<p align='center'>
+<img src="https://github.com/Patryk55o/FischMacroLinux/blob/main/FischLinuxLOGO2.svg">
+</p>
+</h3>
+
 # Fisch Cream's Macro on Python / Debian Linux Port
 
 A line-for-line port of the original AutoHotkey macro
