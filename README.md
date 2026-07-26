@@ -39,6 +39,7 @@ pip install -r requirements.txt
 2. Set your display scale to 100% (e.g. `xrandr --dpi 96`, or your desktop
    environment's scaling setting). Like the original AHK script, this
    assumes 1:1 pixel coordinates.
+3. Change `Settings.ini` to your control in the game. e.g `0.2`
 ## Run
 
 ```bash
@@ -126,6 +127,8 @@ center rather than settling, that's direction chattering, see
   minigame steering logic are preserved as-is from the original script.
 - The subscribe/Discord-prompt block from the original was inert (wrapped
   in a `/* */` comment block in the source) and isn't reproduced.
+- The macro was tested on the SOULREAPER rod with -0.1 control, you're free
+  to modify the `--hold-scale` argument to your liking.
 
 ## Changelog
 
