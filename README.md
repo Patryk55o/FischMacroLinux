@@ -66,6 +66,14 @@ won't press by accident elsewhere. Change it with `--exit-key`, e.g.:
 python3 fisch_macro.py --exit-key esc
 ```
 
+### Q: How do i configure my `--hold-scale` argument?
+
+A: You need to test that argument how ever you want, the default is `1.0`, but if that value is really unstable (e.g loses fish really frequently) then you can use `--hold-scale 0.2459`, as that's my config. You probably shouldn't use this because the hold scale might depend on your system hardware, which if its weak then you might want to adjust the value to make it work as nicely.
+
+### Q: Why don't you just make `0.2459` the default on the `--hold-scale argument`?
+
+A: Making `0.2459` default would introduce more problems on weaker hardware, as I know there are some users that use weaker hardware (as some players might be using, e.g: a laptop from 2014.). Additionally it might make the macro slower, which is quite needed to react quickly to the minigame. That being said if that value does work, then you can use it.
+
 ### Tuning flags
 
 ```bash
