@@ -2,3 +2,4 @@ mss
 numpy
 pyautogui
 pynput
+requests

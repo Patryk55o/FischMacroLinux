@@ -38,9 +38,12 @@ import random
 import subprocess
 import sys
 import time
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event, Lock
+from webhook import send_embed as WebSend
+from datetime import datetime
 
 import numpy as np
 
@@ -345,6 +348,10 @@ class StatusBoard:
             self._fields[key] = value
         self._render()
 
+    def get(self, key, default=None):
+        with self._lock:
+            return self._fields.get(key, default)
+
     def clear(self, key):
         with self._lock:
             self._fields.pop(key, None)
@@ -409,6 +416,7 @@ class Regions:
 
 
 class FischMacro:
+
     def __init__(self, window_title=None, settings_path="Settings.ini", exit_key=None,
                  shake_min_pixels=12, hold_scale=1.0, fixed_pulse_ms=None, steering_input="mouse",
                  deadzone_px=6):
@@ -436,6 +444,17 @@ class FischMacro:
         self.catch_total = 0
         self.control = 0
         self.run_start = time.time()
+
+    def SWebH(self): # this means: SendWebHook
+        while True:
+            self.current_time = datetime.now().strftime("%H:%M:%S")
+            # Sending Webhook
+            WebSend(
+                "Fisch Macro Caught Total",
+                f"## The Macro has caught: {self.catch_total} fish. \n \n ### The Current Status is: {self.status.get('Task', 0)} \n \n-# The message has been sent at {self.current_time}",
+                0x2BFB42
+            )
+            time.sleep(60)
 
     # -- setup -------------------------------------------------------------
     def setup_exit_hotkey(self, exit_key):
@@ -672,6 +691,9 @@ class FischMacro:
         print(f"Made by Cweamya (original AHK) - Python port. Press {self._exit_key_label()} to exit.")
         self.reels(roblox_w, roblox_h)
         last_shake_timer = time.time()
+
+        thread = threading.Thread(target=self.SWebH, daemon=True)
+        thread.start()
 
         while not self.stop_event.is_set():
             try:

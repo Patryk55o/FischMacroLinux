@@ -1,0 +1,10 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+Webhook.ini
+bin/
+include/
+lib/
+lib64
+pyvenv.cfg
+__pycache__/
+*.pyc
+*.kate-swp
