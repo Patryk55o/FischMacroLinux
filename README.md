@@ -4,7 +4,7 @@
 </p>
 </h3>
 
-# Fisch Cream's Macro on Python / Debian Linux Port
+# FischTux, a macro made for *Linux* users
 
 A line-for-line port of the original AutoHotkey macro
 (`Fisch_Cream_s_Macro_free_edition.Ahk` by Cweamya,
