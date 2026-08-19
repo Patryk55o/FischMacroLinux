@@ -4,10 +4,23 @@ import requests
 config = configparser.ConfigParser()
 config.read("Webhook.ini")
 
-WEBHOOK_URL = config["Discord"]["url"]
+WEBHOOK_URL = config.get("Discord", "url", fallback="").strip()
+
+
+def valid_webhook(url):
+    return (
+        url.startswith("https://discord.com/api/webhooks/")
+        or url.startswith("https://discordapp.com/api/webhooks/")
+    )
+
+
+WEBHOOK_ENABLED = valid_webhook(WEBHOOK_URL)
 
 
 def send_embed(title, description, color=0x5865F2):
+    if not WEBHOOK_ENABLED:
+        return
+
     data = {
         "embeds": [
             {
@@ -18,5 +31,13 @@ def send_embed(title, description, color=0x5865F2):
         ]
     }
 
-    response = requests.post(WEBHOOK_URL, json=data)
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            WEBHOOK_URL,
+            json=data,
+            timeout=10
+        )
+        response.raise_for_status()
+
+    except requests.RequestException as e:
+        print(f"Webhook error: {e}")
