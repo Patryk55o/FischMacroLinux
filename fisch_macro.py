@@ -43,6 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event, Lock
 from webhook import send_embed as WebSend
+from webhook import WEBHOOK_ENABLE
 from datetime import datetime
 
 import numpy as np
@@ -692,8 +693,8 @@ class FischMacro:
         self.reels(roblox_w, roblox_h)
         last_shake_timer = time.time()
 
-        thread = threading.Thread(target=self.SWebH, daemon=True)
-        thread.start()
+        if WEBHOOK_ENABLED:
+            threading.Thread(target=SWebH, daemon=True).start()
 
         while not self.stop_event.is_set():
             try:
