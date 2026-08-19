@@ -40,7 +40,7 @@ pip install -r requirements.txt
    environment's scaling setting). Like the original AHK script, this
    assumes 1:1 pixel coordinates.
 3. Change `Settings.ini` to your control in the game. e.g `0.2`
-4. Change `Webhook.ini` to your actual discord webhook. 
+4. Change `Webhook.ini` to your actual discord webhook. **NOT REQUIRED**
 
 ## Run
 
