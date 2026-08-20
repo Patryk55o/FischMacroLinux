@@ -29,7 +29,7 @@ USAGE
 
 This script intentionally keeps the same tuning constants, color
 tolerances, and hold-time interpolation table as the original AHK script,
-so behavior should match closely.
+so behavior should match closely. yes
 """
 
 import configparser
