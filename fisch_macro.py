@@ -694,7 +694,7 @@ class FischMacro:
         last_shake_timer = time.time()
 
         if WEBHOOK_ENABLED:
-            threading.Thread(target=SWebH, daemon=True).start()
+            threading.Thread(target=self.SWebH, daemon=True).start()
 
         while not self.stop_event.is_set():
             try:
