@@ -1,4 +1,4 @@
-name: Notify Discord when pushed
+name: Notify Discord on push
 on:
   push:
 
@@ -30,8 +30,9 @@ jobs:
           REF_SHORT="${REF#refs/heads/}"
           TIMESTAMP="${HEAD_TIME}"
 
-          read -r -d '' PAYLOAD <<EOF || true
+          PAYLOAD=$(cat <<EOF
 {"embeds":[{"title":"$TITLE","description":"$DESCRIPTION","url":"$HEAD_URL","timestamp":"$TIMESTAMP","fields":[{"name":"Commit","value":"$COMMIT","inline":true},{"name":"Author","value":"$AUTHOR","inline":true},{"name":"Ref","value":"$REF_SHORT","inline":true}]}]}
 EOF
+)
 
           curl -s -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK" || true
