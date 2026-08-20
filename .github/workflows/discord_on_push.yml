@@ -22,26 +22,30 @@ jobs:
             exit 0
           fi
 
-          # Prepare a short ref name for display
-          export REF_SHORT="${REF#refs/heads/}"
+          # Shorten fields to Discord limits
+          TITLE="New commit pushed to $REPO"
+          DESCRIPTION="${HEAD_MSG:0:2048}"
+          COMMIT="${HEAD_ID:-$GITHUB_SHA}"
+          COMMIT="${COMMIT:0:1024}"
+          AUTHOR="${HEAD_AUTHOR:-$GITHUB_ACTOR}"
+          REF_SHORT="${REF#refs/heads/}"
+          TIMESTAMP="${HEAD_TIME}"
 
-          # Use a small Python snippet to build safe JSON and pipe it to curl,
-          # avoiding shell-quoting/here-doc issues.
-          python3 - <<'PY' | curl -s -H "Content-Type: application/json" -d @- "$WEBHOOK" || true
-            import os, json
-            repo = os.environ.get("REPO","")
-            payload = {
-              "embeds": [{
-                "title": f"New commit pushed to {repo}",
-                "description": os.environ.get("HEAD_MSG","")[:2048],
-                "url": os.environ.get("HEAD_URL",""),
-                "timestamp": os.environ.get("HEAD_TIME",""),
-                "fields": [
-                  {"name":"Commit", "value": os.environ.get("HEAD_ID", os.environ.get("GITHUB_SHA",""))[:1024], "inline": True},
-                  {"name":"Author", "value": os.environ.get("HEAD_AUTHOR", os.environ.get("GITHUB_ACTOR","")), "inline": True},
-                  {"name":"Ref", "value": os.environ.get("REF_SHORT",""), "inline": True}
-                ]
-              }]
-            }
-          print(json.dumps(payload))
-          PY
+          # Ensure jq exists (install if needed)
+          if ! command -v jq >/dev/null; then
+            echo "jq not found — installing..."
+            sudo apt-get update -y
+            sudo apt-get install -y jq
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg description "$DESCRIPTION" \
+            --arg url "$HEAD_URL" \
+            --arg timestamp "$TIMESTAMP" \
+            --arg commit "$COMMIT" \
+            --arg author "$AUTHOR" \
+            --arg ref "$REF_SHORT" \
+            '{embeds:[{title:$title,description:$description,url:$url,timestamp:$timestamp,fields:[{name:"Commit",value:$commit,inline:true},{name:"Author",value:$author,inline:true},{name:"Ref",value:$ref,inline:true}]}]}')
+
+          echo "$PAYLOAD" | curl -s -H "Content-Type: application/json" -d @- "$WEBHOOK" || true
