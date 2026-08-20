@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event, Lock
 from webhook import send_embed as WebSend
-from webhook import WEBHOOK_ENABLE
+from webhook import WEBHOOK_ENABLED
 from datetime import datetime
 
 import numpy as np
