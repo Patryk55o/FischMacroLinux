@@ -1,3 +1,7 @@
+# Want to suggest a feature?
+
+### You can suggest this in [The Discord Server](https://discord.gg/BFQVYYNBss)
+
 # Things I plan to add:
 
 ## Rods:
