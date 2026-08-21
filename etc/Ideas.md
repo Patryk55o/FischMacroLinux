@@ -5,8 +5,7 @@
 | Different Colored Minigame Rods | Custom Minigames/Weird Minigames |
 |---------------------------------|----------------------------------|
 | ❌ Requiem Rod [Learn More](#Requiem_Rod)| ❌ Tranquility Rod [Learn More](#Tranquility_Rod)|
-| ❌ Blade Of Glorp [Learn More](#Blade_Of_Glorp) ||
-
+| ⚠️ Fabulous Rod [Learn More](#Fabulous_Rod) | |
 
 ## Requiem Rod
 
@@ -24,5 +23,29 @@
 
 1. New Detection
      - This rod doesn't use the normal bar system instead it uses a FNF minigame instead it uses this: 
+      <p align='center'>
+      <img src="https://github.com/Patryk55o/FischMacroLinux/blob/main/etc/TranquilityRod.png">
+      </p>
+     - The keys are rebindable from these options
 
-## Blade Of Glorp
+      `D`,`J`,`F`,`K` (default)
+      
+      `A`,`S`,`D`,`F`
+      
+      `Q`,`W`,`O`,`P`
+      
+      `Z`,`X`,`,`,`.`
+      
+      `←`,`↑`,`↓`,`→`
+
+## Fabulous Rod
+
+### Stuff I think will work out of the box:
+
+1. Minigame Color
+      - Fabulous Rod uses a almost white bar which i think will work out of the box. Problem being I don't have Fabulous Rod so I will make this when i can
+
+### Stuff that needs to be resolved in order to do this:
+
+#### Will work (probably) TO BE UPDATED
+
