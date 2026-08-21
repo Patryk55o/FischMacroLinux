@@ -15,6 +15,8 @@ It works the same way the original did: it looks at on-screen pixel colors
 and clicks/holds the mouse accordingly. It does not touch Roblox's memory
 or process in any way.
 
+## [View Details](etc/Ideas.md)
+
 ## Install
 
 System package (X11 window control, **this will not work under Wayland**):
