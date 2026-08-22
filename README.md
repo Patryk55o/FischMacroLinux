@@ -13,7 +13,7 @@ Debian/X11 instead of Windows.
 
 It works the same way the original did: it looks at on-screen pixel colors
 and clicks/holds the mouse accordingly. It does not touch Roblox's memory
-or process in any way.
+or process in any way. Unlike XTernal which does. XTernal calls us bad, that *other* macros dont offer their useless features [Learn More](#XTernal_Sucks)
 
 ### [Planned Stuff](etc/Ideas.md)
 
@@ -252,3 +252,11 @@ center rather than settling, that's direction chattering, see
      per color checked) instead of one shared screenshot. That added
      avoidable latency on every step. Fish/white/bar checks now reuse a
      single captured frame per iteration.
+
+# XTernal Sucks
+
+They tell it on their website that we (other macros) never update our macros, OpenMacro (the founder of XTernal and Swift) calls us like we are pointless, like puppets on their website, that we dont offer that all rods are supported, well WHAT are we supposed to do? Break the roblox TOS? NO, we don't want to do that. We know it's better but it's going to make us have hell trying to find memory values of each new Sober release, and if I wanted to I would port over XTernal but it would have taken more time to transfer AutoHotKey API's. Now about Swift. Swift is a that has alot of features, BUT guess what? It's locked behind a hell pay wall, which who the heck wants to pay for a MACRO? No one, only people that wanted to support OpenMacro's work. If a openmacro dev is reading this then screw you, ban me if u can. Instead porting them over, you decide to be greedy. It's yet to say that creamy macro is quite outdated, but it's atleast not breaking the TOS. I'll only change my mind if yall contact me personally, and iI'll give yall a challenge, but again
+
+## if your gonna be banning me that means you are scared of one dev fighting for the macro free world.
+
+Making your macro open-source doesn't help it only solves the issue of not being able to get the source code to port over. But then why *wouldn't* you port over the macro to Linux? Popularity won't save you here.
