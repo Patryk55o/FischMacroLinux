@@ -13,7 +13,7 @@ Debian/X11 instead of Windows.
 
 It works the same way the original did: it looks at on-screen pixel colors
 and clicks/holds the mouse accordingly. It does not touch Roblox's memory
-or process in any way. Unlike XTernal which does. XTernal calls us bad, that *other* macros dont offer their useless features [Learn More](#XTernal_Sucks)
+or process in any way. Unlike XTernal which does. XTernal calls us bad, that *other* macros dont offer their useless features [Learn More](#xternal-sucks)
 
 ### [Planned Stuff](etc/Ideas.md)
 
