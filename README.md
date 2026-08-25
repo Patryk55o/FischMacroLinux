@@ -42,7 +42,7 @@ pip install -r requirements.txt
    environment's scaling setting). Like the original AHK script, this
    assumes 1:1 pixel coordinates.
 3. Change `Settings.ini` to your control in the game. e.g `0.2`
-4. Change `Webhook.ini` to your actual discord webhook. **NOT REQUIRED**
+4. Change in `Settings.ini` in the `[Discord]` Category the url to your discord webhook url, however this isnt required
 
 ## Run
 
@@ -69,6 +69,9 @@ won't press by accident elsewhere. Change it with `--exit-key`, e.g.:
 ```bash
 python3 fisch_macro.py --exit-key esc
 ```
+
+## Preset arguments
+Since of the release of v1.11 of the macro you can set your arguments in your `Settings.ini` file
 
 ### Q: How do i configure my `--hold-scale` argument?
 

@@ -928,7 +928,6 @@ class FischMacro:
 
                 self.steer.set(False)
 
-
 def resolve_exit_key(name):
     """Map a CLI-friendly key name to a pynput Key. Defaults to F8."""
     name = name.strip().lower()
@@ -938,69 +937,143 @@ def resolve_exit_key(name):
         return getattr(keyboard.Key, name)
     sys.exit(f"Unrecognized --exit-key '{name}'. Try something like: f8, f9, esc, pause.")
 
+# Sentinel so we can tell "user didn't pass this flag" apart from "user
+# explicitly passed the same value as the hardcoded default" - needed to
+# correctly layer CLI args over Settings.ini values below.
+_UNSET = object()
+
+
+def load_macro_ini_settings(path):
+    """
+    Read an optional [Macro] section from Settings.ini, e.g.:
+
+        [Macro]
+        pulse-ms = 100
+        hold-scale = 0.6
+        deadzone-px = 8
+        shake-min-pixels = 20
+        steering = mouse
+        exit-key = f8
+        window-title = Sober
+
+    Returns a dict of raw string values keyed by the option name (dashes
+    preserved, case-insensitive). Missing file or missing section just
+    means "nothing configured" - not an error.
+    """
+    cfg = configparser.ConfigParser()
+    if Path(path).exists():
+        cfg.read(path)
+    if not cfg.has_section("Macro"):
+        return {}
+    return {k: v for k, v in cfg.items("Macro")}
+
+
+def resolve_setting(cli_value, ini_settings, ini_key, caster, hard_default, flag_name):
+    """
+    Priority: explicit CLI flag > [Macro] value in Settings.ini > hardcoded
+    default. cli_value must be _UNSET when the flag wasn't passed on the
+    command line (see argparse defaults below). Both CLI and Settings.ini
+    values arrive as raw strings and go through the same caster, so a typo
+    in either place fails the same clear way.
+    """
+    if cli_value is not _UNSET:
+        raw, source = cli_value, flag_name
+    else:
+        raw = ini_settings.get(ini_key)
+        source = f"Settings.ini [Macro] {ini_key}"
+        if raw is None or raw.strip() == "":
+            return hard_default
+    try:
+        return caster(raw.strip())
+    except (ValueError, TypeError):
+        sys.exit(f"{source} = '{raw}' is invalid.")
+
+
+
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Fisch Cream's Macro - Python/Linux port")
-    parser.add_argument("--window-title", default=None,
+    parser.add_argument("--window-title", default=_UNSET,
                          help="Optional: substring of the game window title to match. "
                               "If omitted (default), you'll be prompted to click on the "
-                              "game window instead (via `xdotool selectwindow`).")
+                              "game window instead (via `xdotool selectwindow`). Can also be "
+                              "set via Settings.ini [Macro] window-title.")
     parser.add_argument("--settings", default="Settings.ini",
-                         help="Path to Settings.ini for the Control fallback value")
-    parser.add_argument("--exit-key", default="f8",
+                         help="Path to Settings.ini, used both for the Control fallback value "
+                              "and for the optional [Macro] section providing default values "
+                              "for the flags below (CLI flags always take priority).")
+    parser.add_argument("--exit-key", default=_UNSET,
                          help="Key that stops the macro (default: f8). This is a SYSTEM-WIDE "
                               "hotkey, not scoped to the game window, so avoid keys you press "
                               "often elsewhere (e.g. 'space' is a bad choice - it's a common "
-                              "video/browser pause key and can stop the macro by accident).")
-    parser.add_argument("--shake-min-pixels", type=int, default=12,
+                              "video/browser pause key and can stop the macro by accident). "
+                              "Can also be set via Settings.ini [Macro] exit-key.")
+    parser.add_argument("--shake-min-pixels", default=_UNSET,
                          help="Minimum matched white pixels required before a shake-button "
                               "detection counts (default: 12). Raise this if the macro gets "
                               "'stuck' thinking it's shaking when it isn't (false positives "
-                              "from glare/UI); lower it if real shake buttons are being missed.")
-    parser.add_argument("--hold-scale", type=float, default=1.0,
+                              "from glare/UI); lower it if real shake buttons are being missed. "
+                              "Can also be set via Settings.ini [Macro] shake-min-pixels.")
+    parser.add_argument("--hold-scale", default=_UNSET,
                          help="Multiplier applied to every minigame hold duration (default: 1.0 "
                               "= unchanged). On low-Control rods the bar can overshoot a narrow "
                               "target zone even on the shortest possible pulse; try a smaller "
                               "value like 0.6-0.8 to shorten pulses and reduce overshoot. This is "
                               "experimental and may need tuning per rod. Ignored if --pulse-ms "
-                              "is set.")
-    parser.add_argument("--pulse-ms", type=float, default=None,
+                              "is set. Can also be set via Settings.ini [Macro] hold-scale.")
+    parser.add_argument("--pulse-ms", default=_UNSET,
                          help="Bypass the variable hold-time formula entirely and always hold "
                               "the steering input for this many milliseconds (e.g. 100). Useful "
                               "when a rod's Control is so low the fish sits centered and the "
                               "variable formula can't converge - fast, fixed-length pulses can "
                               "spam faster than the formula allows. Overrides --hold-scale. "
-                              "Default: unset (use the variable formula).")
-    parser.add_argument("--steering", choices=["mouse", "space"], default="mouse",
+                              "Default: unset (use the variable formula). Can also be set via "
+                              "Settings.ini [Macro] pulse-ms.")
+    parser.add_argument("--steering", choices=["mouse", "space"], default=_UNSET,
                          help="Input used to steer the minigame bar (default: mouse). Real-world "
                               "testing with a hardware autoclicker confirmed mouse works better "
                               "than spacebar here, contrary to an earlier guess - this flag is "
-                              "kept in case that's worth revisiting.")
-    parser.add_argument("--deadzone-px", type=int, default=6,
+                              "kept in case that's worth revisiting. Can also be set via "
+                              "Settings.ini [Macro] steering.")
+    parser.add_argument("--deadzone-px", default=_UNSET,
                          help="Fixed-pulse mode only: minimum fish-to-bar offset (in pixels) "
                               "required before switching direction (default: 6). Prevents "
                               "direction chattering ('going left and right' near center) from a "
                               "naive bang-bang controller flipping on every pixel of noise. "
                               "Raise it if it still chatters, lower it (even to 0) if it feels "
-                              "sluggish to correct.")
+                              "sluggish to correct. Can also be set via Settings.ini [Macro] "
+                              "deadzone-px.")
     args = parser.parse_args()
 
-    exit_key = resolve_exit_key(args.exit_key)
+    ini_settings = load_macro_ini_settings(args.settings)
+
+    window_title = resolve_setting(args.window_title, ini_settings, "window-title", str, None, "--window-title")
+    if window_title == "":
+        window_title = None
+    exit_key_name = resolve_setting(args.exit_key, ini_settings, "exit-key", str, "f8", "--exit-key")
+    shake_min_pixels = resolve_setting(args.shake_min_pixels, ini_settings, "shake-min-pixels", int, 12, "--shake-min-pixels")
+    hold_scale = resolve_setting(args.hold_scale, ini_settings, "hold-scale", float, 1.0, "--hold-scale")
+    pulse_ms_raw = resolve_setting(args.pulse_ms, ini_settings, "pulse-ms", float, None, "--pulse-ms")
+    steering = resolve_setting(args.steering, ini_settings, "steering", str, "mouse", "--steering")
+    if steering not in ("mouse", "space"):
+        sys.exit(f"Settings.ini [Macro] steering = '{steering}' must be 'mouse' or 'space'.")
+    deadzone_px = resolve_setting(args.deadzone_px, ini_settings, "deadzone-px", int, 6, "--deadzone-px")
+
+    exit_key = resolve_exit_key(exit_key_name)
 
     print(
         "This is Fisch Cream's Macro (Python/Linux port of the FREE VERSION).\n"
         "Original by Cweamya: https://github.com/Cweamy/Fisch-Cream-s-Macro\n"
         "Make sure Roblox is fullscreen with Camera Mode enabled, and your\n"
         "display scale is set to 100% before starting.\n"
-        f"Press '{args.exit_key.upper()}' at any time to stop (this works system-wide,\n"
+        f"Press '{exit_key_name.upper()}' at any time to stop (this works system-wide,\n"
         "not just while the game is focused).\n"
     )
 
-    macro = FischMacro(window_title=args.window_title, settings_path=args.settings, exit_key=exit_key,
-                        shake_min_pixels=args.shake_min_pixels, hold_scale=args.hold_scale,
-                        fixed_pulse_ms=args.pulse_ms, steering_input=args.steering,
-                        deadzone_px=args.deadzone_px)
+    macro = FischMacro(window_title=window_title, settings_path=args.settings, exit_key=exit_key,
+                        shake_min_pixels=shake_min_pixels, hold_scale=hold_scale,
+                        fixed_pulse_ms=pulse_ms_raw, steering_input=steering)
     try:
         macro.run()
     except KeyboardInterrupt:
