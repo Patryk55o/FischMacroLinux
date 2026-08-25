@@ -70,6 +70,9 @@ won't press by accident elsewhere. Change it with `--exit-key`, e.g.:
 python3 fisch_macro.py --exit-key esc
 ```
 
+## Preset arguments
+Since of the release of v1.11 of the macro you can set your arguments in your `Settings.ini` file
+
 ### Q: How do i configure my `--hold-scale` argument?
 
 A: You need to test that argument how ever you want, the default is `1.0`, but if that value is really unstable (e.g loses fish really frequently) then you can use `--hold-scale 0.2459`, as that's my config. You probably shouldn't use this because the hold scale might depend on your system hardware, which if its weak then you might want to adjust the value to make it work as nicely.
