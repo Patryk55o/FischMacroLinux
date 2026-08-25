@@ -45,7 +45,7 @@ pip install -r requirements.txt
 
 ## Run
 
-You can now run the macro in the brand new GUI, just run `FischTuxGUI.sh` and you can configure your settings AND launch your macro. However if you are a true linux user the rest of this file will say about the command line way.
+You can now run the macro in the brand new GUI, just run `FischTuxGUI.sh` and you can configure your settings AND launch your macro. However if you are a true linux user the rest of this file will say about the command line way. Also after starting the macro click the roblox window. The macro is asking for your click when you didn't put the window title.
 
 ```bash
 python3 fisch_macro.py
