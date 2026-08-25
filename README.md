@@ -41,10 +41,11 @@ pip install -r requirements.txt
 2. Set your display scale to 100% (e.g. `xrandr --dpi 96`, or your desktop
    environment's scaling setting). Like the original AHK script, this
    assumes 1:1 pixel coordinates.
-3. Change `Settings.ini` to your control in the game. e.g `0.2`
-4. Change in `Settings.ini` in the `[Discord]` Category the url to your discord webhook url, however this isnt required
+3. Run `FischTuxGUI.sh` either by opening it like a normal file or by the terminal, it's a brand new feature, the new GUI
 
 ## Run
+
+You can now run the macro in the brand new GUI, just run `FischTuxGUI.sh` and you can configure your settings AND launch your macro. However if you are a true linux user the rest of this file will say about the command line way.
 
 ```bash
 python3 fisch_macro.py
