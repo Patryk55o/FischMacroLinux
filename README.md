@@ -41,7 +41,7 @@ pip install -r requirements.txt
 2. Set your display scale to 100% (e.g. `xrandr --dpi 96`, or your desktop
    environment's scaling setting). Like the original AHK script, this
    assumes 1:1 pixel coordinates.
-3. Run `FischTuxGUI.sh` either by opening it like a normal file or by the terminal, it's a brand new feature, the new GUI
+3. Run `FischTuxGUI.sh` either by opening it like a normal file or by the terminal, it's a brand new feature, the new GUI. You can configure your settings and your webhook (Note: if you put your discord WEBHOOK URL in the gui, in your next launch it will not appear **but it is actually saved to `Settings.ini`** so don't worry.
 
 ## Run
 
