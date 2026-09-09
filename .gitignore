@@ -7,3 +7,4 @@ pyvenv.cfg
 __pycache__/
 *.pyc
 *.kate-swp
+etc/macroversion.txt

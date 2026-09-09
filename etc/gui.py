@@ -24,6 +24,8 @@ ctk.set_default_color_theme("green")
 SETTINGS_FILE = "Settings.ini"
 MACRO_SCRIPT = "fisch_macro.py"
 PROFILES_DIR = Path("Profiles")
+VERSION_CURRENT = "1.12.2"
+VERSION_URL = "https://raw.githubusercontent.com/Patryk55o/FischMacroLinux/refs/heads/main/etc/macroversion.txt"
 
 DEFAULT_COLOR_UI_STR = "0xffdcac:10, 0x3d381b:10, 0xfffde4:10"
 DEFAULT_COLOR_FISH_STR = "0x434b5b:3, 0x4a4a5c:4, 0x47515d:4"
@@ -687,6 +689,7 @@ class MacroGUI(ctk.CTk):
 
         # Load settings
         self.load_settings()
+        self.after(1000, self.check_for_update)
 
     def setup_f9_hotkey(self):
         try:
@@ -1289,6 +1292,81 @@ class MacroGUI(ctk.CTk):
             self.stop_btn.configure(state="disabled")
             self.write_log("Macro offline.")
         self.after(0, reset)
+
+    def check_for_update(self):
+        """Check the server for a newer FischTux version."""
+        try:
+            import urllib.request
+
+            with urllib.request.urlopen(VERSION_URL, timeout=5) as response:
+                version_server = response.read().decode("utf-8").strip()
+
+            if not version_server:
+                return
+
+            if version_server != VERSION_CURRENT:
+                self.show_update_prompt(VERSION_CURRENT, version_server)
+
+        except Exception as e:
+            self.write_log(f"Update check failed: {e}")
+
+
+    def show_update_prompt(self, version_current, version_server):
+        """Show the update confirmation dialog."""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("FischTux Update Available")
+        dialog.geometry("500x220")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.attributes("-topmost", True)
+
+        # Message
+        ctk.CTkLabel(
+            dialog,
+            text=(
+                f"Your version of FischTux ({version_current}) is out of date.\n\n"
+                f"The latest version is ({version_server}).\n\n"
+                "Do you want to update?"
+            ),
+            font=ctk.CTkFont(size=15),
+            justify="center"
+        ).pack(padx=30, pady=(30, 20))
+
+        # Buttons
+        button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        button_frame.pack(fill="x", padx=40, pady=(0, 25))
+
+        def update():
+            dialog.destroy()
+            self.update_fischtux(version_server)
+
+        ctk.CTkButton(
+            button_frame,
+            text="Yes",
+            fg_color="#28a745",
+            hover_color="#218838",
+            height=40,
+            command=update
+        ).pack(side="left", expand=True, fill="x", padx=(0, 10))
+
+        ctk.CTkButton(
+            button_frame,
+            text="No",
+            fg_color="#dc3545",
+            hover_color="#c82333",
+            height=40,
+            command=dialog.destroy
+        ).pack(side="left", expand=True, fill="x", padx=(10, 0))
+
+
+    def update_fischtux(self, version_server):
+        """Run the FischTux update process."""
+        self.write_log(
+            f"Updating FischTux to version {version_server}..."
+        )
+
+        subprocess.run(['/bin/bash', '-c', '"git pull"'])
 
 
 if __name__ == "__main__":
