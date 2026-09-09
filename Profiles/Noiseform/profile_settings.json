@@ -1,0 +1,19 @@
+{
+  "profile_name": "Noiseform",
+  "Macro": {
+    "profile": "Noiseform",
+    "window-title": "",
+    "exit-key": "f8",
+    "steering": "mouse",
+    "pulse-ms": "",
+    "hold-scale": "0.2459",
+    "shake-min-pixels": "12",
+    "deadzone-px": "6",
+    "color-ui": "0xffdcac:10, 0x3d381b:10, 0xfffde4:10",
+    "color-fish": "0x010906:8, 0x020d09:8, 0x02110c:8, 0x03160f:8, 0x031a12:8, 0x041e15:8, 0x042218:8, 0x05261b:8, 0x052a1e:8, 0x062f21:8, 0x063324:8, 0x073727:8",
+    "color-bar": "0x2e8e50:8, 0x369558:8, 0x3e9d60:8, 0x46a467:8, 0x4eab6f:8, 0x56b377:8, 0x5dba7f:8, 0x65c287:8, 0x6dc98f:8, 0x75d096:8, 0x7dd89e:8, 0x85dfa6:8, 0x85dfa5:8, 0x7dd89d:8, 0x75d096:8, 0x6dc98e:8, 0x65c186:8, 0x5dba7e:8, 0x55b277:8, 0x4dab6f:8, 0x45a367:8, 0x3d9c5f:8, 0x359458:8, 0x2d8d50:8, 0x030303:4"
+  },
+  "Fisch": {
+    "control": "0.001"
+  }
+}

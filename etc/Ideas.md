@@ -1,7 +1,3 @@
-# Macro Engine
-
-3 days ago, a new color detection macro dropped called [Deepfish](https://github.com/yatonomacro/DeepFish), for AHK. Now i really wanna upgrade the macro however, since you cant redistribute their macro i cant really do it. But i'll bring some parts to the macro to our GUI. That being said the Main Reason that I want to port over this macro because it offers custom profiles (WHICH i might use for rods that have CUSTOM minigames!), these profiles can have your: fish bar minigame etc. This would be great to use, but again i cant redistribute it.
-
 # Want to suggest a feature?
 
 ### You can suggest this in [The Discord Server](https://discord.gg/BFQVYYNBss)

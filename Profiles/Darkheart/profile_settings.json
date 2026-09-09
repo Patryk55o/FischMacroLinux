@@ -1,0 +1,19 @@
+{
+  "profile_name": "Darkheart",
+  "Macro": {
+    "profile": "Darkheart",
+    "window-title": "",
+    "exit-key": "f8",
+    "steering": "mouse",
+    "pulse-ms": "",
+    "hold-scale": "0.2459",
+    "shake-min-pixels": "12",
+    "deadzone-px": "6",
+    "color-ui": "0xffdcac:10, 0x3d381b:10, 0xfffde4:10",
+    "color-fish": "0x111111:4, 0x9ba094:4",
+    "color-bar": "0x030303:4"
+  },
+  "Fisch": {
+    "control": "0.10"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "profile_name": "NormalRods",
+  "Macro": {
+    "profile": "NormalRods",
+    "window-title": "",
+    "exit-key": "f8",
+    "steering": "mouse",
+    "pulse-ms": "",
+    "hold-scale": "0.2459",
+    "shake-min-pixels": "12",
+    "deadzone-px": "6",
+    "color-ui": "0xffdcac:10, 0x3d381b:10, 0xfffde4:10",
+    "color-fish": "0x434b5b:3, 0x4a4a5c:4, 0x47515d:4",
+    "color-bar": "0xFFFFFF:10"
+  },
+  "Fisch": {
+    "control": "0.08"
+  }
+}

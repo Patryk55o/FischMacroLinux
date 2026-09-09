@@ -1,7 +1,7 @@
 import configparser
 import requests
 
-config = configparser.ConfigParser()
+config = configparser.ConfigParser(strict=False)
 config.read("Settings.ini")
 
 WEBHOOK_URL = config.get("Discord", "url", fallback="").strip()

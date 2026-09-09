@@ -33,6 +33,7 @@ so behavior should match closely. yes
 """
 
 import configparser
+import json
 import math
 import random
 import subprocess
@@ -73,12 +74,67 @@ except ImportError:
 
 
 # ============================================================================
-# Color targets (same values as the AHK script; 0xRRGGBB -> tolerance)
+# Color targets (default values matching original script; 0xRRGGBB -> tolerance)
 # ============================================================================
-COLOR_UI = {0xffdcac: 10, 0x3d381b: 10, 0xfffde4: 10}
-COLOR_FISH = {0x434b5b: 3, 0x4a4a5c: 4, 0x47515d: 4}
-COLOR_WHITE = {0xFFFFFF: 15}
-COLOR_BAR = {0x848587: 4, 0x787773: 4, 0x7a7873: 4}
+DEFAULT_COLOR_UI = {0xffdcac: 10, 0x3d381b: 10, 0xfffde4: 10}
+DEFAULT_COLOR_FISH = {0x434b5b: 3, 0x4a4a5c: 4, 0x47515d: 4}
+DEFAULT_COLOR_WHITE = {0xFFFFFF: 15}
+DEFAULT_COLOR_BAR = {0x848587: 4, 0x787773: 4, 0x7a7873: 4}
+
+COLOR_UI = dict(DEFAULT_COLOR_UI)
+COLOR_FISH = dict(DEFAULT_COLOR_FISH)
+COLOR_WHITE = dict(DEFAULT_COLOR_WHITE)
+COLOR_BAR = dict(DEFAULT_COLOR_BAR)
+
+
+def parse_color_dict(color_str, default_dict=None):
+    """
+    Parses a string of hex colors and tolerances into a dict {0xRRGGBB: tolerance}.
+    Supports formats like:
+      - "0xffdcac:10, 0x3d381b:10, 0xfffde4:10"
+      - "#FFDCAC:10, #3D381B:10"
+      - "0xffdcac, 0x3d381b" (uses default tolerance from default_dict or 10)
+    """
+    if not color_str or not isinstance(color_str, str) or not color_str.strip():
+        return dict(default_dict) if default_dict is not None else {}
+
+    default_tol = 10
+    if default_dict and len(default_dict) > 0:
+        default_tol = list(default_dict.values())[0]
+
+    result = {}
+    tokens = [t.strip() for t in color_str.split(",") if t.strip()]
+    for token in tokens:
+        if ":" in token:
+            parts = token.split(":", 1)
+            hex_str, tol_str = parts[0].strip(), parts[1].strip()
+            try:
+                tol = int(tol_str)
+            except ValueError:
+                tol = default_tol
+        else:
+            hex_str = token
+            tol = default_tol
+
+        hex_clean = hex_str.lower().replace("#", "").replace("0x", "")
+        try:
+            val = int(hex_clean, 16)
+            result[val] = tol
+        except ValueError:
+            continue
+
+    return result if result else (dict(default_dict) if default_dict is not None else {})
+
+
+def format_color_dict(color_dict):
+    """Formats a dict {0xRRGGBB: tolerance} into a string '0xRRGGBB:tol, 0xRRGGBB:tol'."""
+    if not color_dict:
+        return ""
+    items = []
+    for h, tol in color_dict.items():
+        items.append(f"0x{h:06x}:{tol}")
+    return ", ".join(items)
+
 
 # HoldFormula interpolation table: [hold_ms, pixel_distance_at_800px_width]
 HOLD_DATA = [
@@ -300,6 +356,36 @@ class ColorSearcher:
                 if width_range[0] <= (r[1] - r[0]) <= width_range[1]]
 
     @staticmethod
+    def find_solid_bar_runs(rgb, left, colors: dict, min_col_count=2, max_gap=6, width_range=(15, 600)):
+        """
+        Find contiguous column runs matching any of the given colors, requiring
+        at least min_col_count matching pixels per column to filter out single-pixel noise.
+        Returns a list of (min_x, max_x) tuples in absolute screen coordinates.
+        """
+        combined = None
+        for target, tol in _prepared(colors):
+            diff = np.abs(rgb - target)
+            mask = np.all(diff <= tol, axis=2)
+            combined = mask if combined is None else (combined | mask)
+        if combined is None:
+            return []
+        col_counts = combined.sum(axis=0)
+        good = np.nonzero(col_counts >= min_col_count)[0]
+        if len(good) == 0:
+            return []
+        runs = []
+        start = good[0]
+        prev = good[0]
+        for c in good[1:]:
+            if c - prev > max_gap:
+                runs.append((start, prev))
+                start = c
+            prev = c
+        runs.append((start, prev))
+        return [(int(left + r[0]), int(left + r[1])) for r in runs
+                if width_range[0] <= (r[1] - r[0]) <= width_range[1]]
+
+    @staticmethod
     def match_centroid_x_in_frame(rgb, left, colors: dict, min_pixels=1):
         """
         Returns the mean x-position of all matching pixels (not just the
@@ -420,7 +506,7 @@ class FischMacro:
 
     def __init__(self, window_title=None, settings_path="Settings.ini", exit_key=None,
                  shake_min_pixels=12, hold_scale=1.0, fixed_pulse_ms=None, steering_input="mouse",
-                 deadzone_px=6):
+                 deadzone_px=6, color_ui=None, color_fish=None, color_bar=None, color_white=None):
         self.window_title = window_title
         self.settings_path = Path(settings_path)
         self.exit_key = exit_key if exit_key is not None else keyboard.Key.f8
@@ -428,6 +514,10 @@ class FischMacro:
         self.hold_scale = hold_scale
         self.fixed_pulse_ms = fixed_pulse_ms
         self.deadzone_px = deadzone_px
+        self.color_ui = color_ui if color_ui is not None else dict(DEFAULT_COLOR_UI)
+        self.color_fish = color_fish if color_fish is not None else dict(DEFAULT_COLOR_FISH)
+        self.color_bar = color_bar if color_bar is not None else dict(DEFAULT_COLOR_BAR)
+        self.color_white = color_white if color_white is not None else dict(DEFAULT_COLOR_WHITE)
         self.searcher = ColorSearcher()
         self.mouse = MouseController()
         self.key = KeyHoldController("space")
@@ -512,7 +602,7 @@ class FischMacro:
 
     def check_camera_mode(self, ingame_ui, roblox_w, roblox_h, screen_w, screen_h):
         for _ in range(5):
-            found = self.searcher.find_color(*ingame_ui, COLOR_UI)
+            found = self.searcher.find_color(*ingame_ui, self.color_ui)
             if found is not None:
                 self.status.set("Notice", "Please open Camera Mode")
                 time.sleep(1)
@@ -526,13 +616,24 @@ class FischMacro:
     def search(self, region, colors):
         return self.searcher.find_color(*region, colors)
 
+    def get_fish_center(self, rgb, left):
+        """Locate the exact center X position of the fish icon."""
+        centroid = self.searcher.match_centroid_x_in_frame(rgb, left, self.color_fish, min_pixels=2)
+        if centroid is not None:
+            return centroid
+        return self.searcher.match_in_frame(rgb, left, self.color_fish)
+
+    def find_fish_pos(self, region_minigame):
+        rgb, left, _ = self.searcher.grab(*region_minigame)
+        return self.get_fish_center(rgb, left)
+
     def wait(self, region_minigame, time_ms):
         """Mirrors AHK Wait(): polls fish position; returns True/False like original."""
         start = time.time()
         while True:
             if self.stop_event.is_set():
                 return False
-            fish_pos = self.search(region_minigame, COLOR_FISH)
+            fish_pos = self.find_fish_pos(region_minigame)
             if fish_pos is None or fish_pos < region_minigame[0] or fish_pos > region_minigame[2]:
                 return bool(fish_pos)
             if (time.time() - start) * 1000 > time_ms:
@@ -540,41 +641,20 @@ class FischMacro:
         return False
 
     def locate_bar(self, rgb, left):
-        """
-        Find the reticle's horizontal position. Prioritizes the arrow icon's
-        centroid (COLOR_BAR) since it's confirmed consistent regardless of
-        the reticle's own fill color, which shifts across a red->green range
-        depending on game state and makes fill-color matching (COLOR_WHITE)
-        unreliable most of the time. Falls back to the old white-fill-based
-        estimate, then a plain first-match on the arrow color, if the
-        centroid approach comes up empty.
-        """
-        centroid = self.searcher.match_centroid_x_in_frame(rgb, left, COLOR_BAR, min_pixels=3)
+        centroid = self.searcher.match_centroid_x_in_frame(rgb, left, self.color_bar, min_pixels=3)
         if centroid is not None:
             return centroid
-        white = self.searcher.match_in_frame(rgb, left, COLOR_WHITE)
+        white = self.searcher.match_in_frame(rgb, left, self.color_white)
         if white is not None:
             return white + round(self.control * 0.5)
-        return self.searcher.match_in_frame(rgb, left, COLOR_BAR)
+        return self.searcher.match_in_frame(rgb, left, self.color_bar)
 
     def hold_formula(self, pixel, roblox_w):
         if self.fixed_pulse_ms is not None:
-            # Fixed-pulse mode: always hold for the same constant duration
-            # every cycle, regardless of which side of the bar the fish is
-            # on. The crossing-safety clamp below exists to guard the
-            # variable interpolation table, which doesn't apply here - on a
-            # low-Control rod the fish crosses paths constantly, and that
-            # clamp was silently forcing 0ms (i.e. ignoring --pulse-ms)
-            # almost every cycle.
             hold = self.fixed_pulse_ms
             self.status.set("Hold", f"{hold:.0f}ms (fixed)")
             return hold
 
-        # Fish crossed past the bar's original snapshot position -> stop holding.
-        # (In AHK this indexes data[0-1], which is an out-of-bounds/blank read;
-        # in Python that silently wraps to the LAST table entry instead, which
-        # produced huge bogus hold times right when the fish changes direction
-        # - the exact moment tracking accuracy matters most. Treat it as "done".)
         if pixel <= 0:
             self.status.set("Hold", "0ms")
             return 0
@@ -608,56 +688,77 @@ class FischMacro:
         self.click_count = 0
 
     def click_shake(self, shake_region):
-        result = self.searcher.find_color_xy_count(*shake_region, COLOR_WHITE)
+        result = self.searcher.find_color_xy_count(*shake_region, self.color_white)
         if result is None:
             return None
         x, y, count = result
         if count < self.shake_min_pixels:
-            # Too small to be a real shake button - likely glare, UI text,
-            # or another stray white pixel. Ignoring this prevents the
-            # fail-safe timer from being reset forever by a false positive,
-            # which was causing the macro to sit "stuck" thinking it was
-            # mid-shake and never re-cast.
             return None
         pyautogui.press("enter")
         time.sleep(0.1)
         return (x, y)
 
     def estimate_bar_center(self, rgb, left, x_left, x_right):
-        """
-        Estimate the reticle box's horizontal center from its two arrow
-        glyphs (constant gray, unlike the box's own dynamically-shifting
-        fill color). Handles two real-world cases seen in actual gameplay
-        screenshots:
-          - both arrows visible: center = midpoint between them.
-          - only one arrow visible (box pushed against a track edge, so the
-            other arrow isn't rendered): estimate the far edge using the
-            known box width (self.control) and which track edge the single
-            arrow is closer to.
-        Returns None if no arrow blob is found at all.
-        """
-        runs = self.searcher.find_arrow_runs(rgb, left, COLOR_BAR)
-        if not runs:
-            return None
-        if len(runs) >= 2:
-            leftmost = min(r[0] for r in runs)
-            rightmost = max(r[1] for r in runs)
-            return (leftmost + rightmost) / 2
-        # Only one arrow blob found.
-        run_min, run_max = runs[0]
-        run_center = (run_min + run_max) / 2
-        if not self.control or self.control <= 0:
-            return run_center
-        half = self.control / 2
-        if abs(run_center - x_left) < abs(run_center - x_right):
-            # Closer to the left edge -> this is almost certainly the left
-            # arrow, box center is to its right.
-            return run_center + half
-        else:
-            return run_center - half
+        # 1. Primary: Check noise-filtered arrow runs (vertical blob detection, min 3 pixels per column)
+        runs = self.searcher.find_arrow_runs(rgb, left, self.color_bar)
+        if runs:
+            if len(runs) >= 2:
+                leftmost = min(r[0] for r in runs)
+                rightmost = max(r[1] for r in runs)
+                width = rightmost - leftmost
+                # Lock in self.control from the real measured arrow spacing
+                # the first time we get a clean two-arrow reading. This is
+                # the reliable case (confirmed against real screenshots) -
+                # without this, self.control never gets set here at all for
+                # classic arrow-icon rods, since this branch only used to
+                # read self.control, never write it. That silently forced
+                # every arrow-rod session onto the much coarser Settings.ini
+                # fallback formula instead of the actual on-screen width.
+                if (not self.control or self.control <= 0) and width > 0:
+                    self.control = width
+                return (leftmost + rightmost) / 2
+            run_min, run_max = runs[0]
+            run_center = (run_min + run_max) / 2
+            if not self.control or self.control <= 0:
+                return run_center
+            half = self.control / 2
+            if abs(run_center - x_left) < abs(run_center - x_right):
+                return run_center + half
+            else:
+                return run_center - half
+
+        # 2. Secondary: Check noise-filtered solid bar runs for COLOR_BAR or COLOR_WHITE.
+        # Used for skins with no fixed gray arrows (e.g. a solid/rainbow bar).
+        bar_runs = self.searcher.find_solid_bar_runs(rgb, left, self.color_bar)
+        if not bar_runs:
+            bar_runs = self.searcher.find_solid_bar_runs(rgb, left, self.color_white)
+
+        if bar_runs:
+            widest = max(bar_runs, key=lambda r: r[1] - r[0])
+            min_x, max_x = widest
+            w = max_x - min_x
+            # Only ever set self.control from this tier ONCE (while it's
+            # still unset/invalid). Once we have a real reading, freeze it -
+            # otherwise a per-rod constant would silently drift every frame
+            # based on whatever run happens to be widest that frame (e.g. an
+            # animated highlight segment on a rainbow bar), corrupting the
+            # dead-zone thresholds and hold-time scaling mid-catch.
+            if (not self.control or self.control <= 0) and 15 <= w <= round((x_right - x_left) * 0.85):
+                self.control = w
+            return (min_x + max_x) / 2
+
+        # 3. Tertiary: Fall back to centroid matching for COLOR_BAR or COLOR_WHITE
+        centroid = self.searcher.match_centroid_x_in_frame(rgb, left, self.color_bar, min_pixels=3)
+        if centroid is not None:
+            return centroid
+        centroid_w = self.searcher.match_centroid_x_in_frame(rgb, left, self.color_white, min_pixels=3)
+        if centroid_w is not None:
+            return centroid_w
+
+        return None
 
     def load_control_fallback(self):
-        cfg = configparser.ConfigParser()
+        cfg = configparser.ConfigParser(strict=False)
         if self.settings_path.exists():
             cfg.read(self.settings_path)
         control_raw = 0.0
@@ -721,12 +822,8 @@ class FischMacro:
                 last_shake_timer = time.time()
 
             fish_frame_rgb, fish_frame_left, _ = self.searcher.grab(*minigame)
-            fish_found = self.searcher.match_in_frame(fish_frame_rgb, fish_frame_left, COLOR_FISH) is not None
-            # Was COLOR_WHITE - only reliably present when the box happens
-            # to be in its near-aligned fill-color state, which usually
-            # isn't true right when the minigame starts. The arrow glyphs
-            # are present regardless of the box's fill color/state.
-            box_found = self.searcher.match_in_frame(fish_frame_rgb, fish_frame_left, COLOR_BAR) is not None
+            fish_found = self.get_fish_center(fish_frame_rgb, fish_frame_left) is not None
+            box_found = self.estimate_bar_center(fish_frame_rgb, fish_frame_left, minigame[0], minigame[2]) is not None
             if fish_found and box_found:
                 self.play_minigame(minigame, roblox_w, roblox_h)
                 self.catch_total += 1
@@ -735,8 +832,6 @@ class FischMacro:
                 self.reels(roblox_w, roblox_h)
                 last_shake_timer = time.time()
 
-        # Make sure nothing is left held down (mouse button or space key)
-        # if the macro stops mid-hold.
         self.mouse.set(False)
         self.key.set(False)
         print("\nStopped.")
@@ -748,25 +843,14 @@ class FischMacro:
     def play_minigame(self, minigame, roblox_w, roblox_h):
         x_left, y_left, x_right, y_right = minigame
 
-        if not self.control:
+        if not self.control or self.control <= 0:
             for _ in range(50):
                 rgb, left, top = self.searcher.grab(x_left, y_left, x_right, y_right)
-                # Use the arrow glyphs (constant gray regardless of the
-                # box's dynamically-shifting fill color) rather than the
-                # old white-color search, which only matched the box's
-                # rare near-aligned/near-white state. Require BOTH arrows
-                # here specifically, since a single visible arrow (box
-                # pushed against a track edge) would give a badly wrong
-                # width measurement.
-                runs = self.searcher.find_arrow_runs(rgb, left, COLOR_BAR)
-                if len(runs) >= 2:
-                    leftmost = min(r[0] for r in runs)
-                    rightmost = max(r[1] for r in runs)
-                    self.control = rightmost - leftmost
-                    if self.control > 0:
-                        break
+                bar = self.estimate_bar_center(rgb, left, x_left, x_right)
+                if self.control and 15 <= self.control <= round((x_right - x_left) * 0.85):
+                    break
                 time.sleep(0.02)
-            if self.control <= 0:
+            if not self.control or self.control <= 0:
                 control_raw = self.load_control_fallback()
                 self.control = round((roblox_w / 800) * ((320 * control_raw) + 97))
 
@@ -780,26 +864,9 @@ class FischMacro:
         self.status.set("Task", "Minigame ended, restarting")
 
     def _play_minigame_fixed_pulse(self, minigame):
-        """
-        Simple, direction-aware bang-bang controller with an exact fixed
-        cadence: check which way the fish is relative to the bar, hold or
-        release accordingly, sleep exactly --pulse-ms, repeat.
-
-        This intentionally bypasses hold_formula()/wait() entirely - those
-        exist to support the variable-duration formula path and introduce
-        their own timing (nested polling loops, a 0.6x post-release sleep,
-        etc.) that made the actual on/off timing drift away from the
-        requested pulse length. This loop's cadence is just time.sleep(),
-        so what you set in --pulse-ms is what you get.
-
-        A small dead-zone (--deadzone-px) prevents direction chattering:
-        without it, a naive bang-bang controller flips direction on every
-        single pixel of noise right around the setpoint, which looks like
-        constant "going left and right" instead of settling near center.
-        """
         x_left, y_left, x_right, y_right = minigame
         pulse_s = self.fixed_pulse_ms / 1000.0
-        hold_right = None  # unknown yet - first reading always sets it
+        hold_right = None
 
         while True:
             if self.stop_event.is_set():
@@ -809,15 +876,10 @@ class FischMacro:
             cycle_start = time.time()
 
             rgb, left, top = self.searcher.grab(x_left, y_left, x_right, y_right)
-            fish_pos = self.searcher.match_in_frame(rgb, left, COLOR_FISH)
+            fish_pos = self.get_fish_center(rgb, left)
             if fish_pos is None:
                 break
 
-            # The box's own fill color shifts dynamically (brown / olive /
-            # near-white depending on distance from target), so it can't be
-            # used to find the box reliably. estimate_bar_center() uses the
-            # two arrow glyphs instead, which stay a constant gray
-            # regardless of that fill color.
             bar = self.estimate_bar_center(rgb, left, x_left, x_right)
             capture_ms = (time.time() - cycle_start) * 1000
             if bar is None:
@@ -826,18 +888,11 @@ class FischMacro:
 
             rng = fish_pos - bar
             if abs(rng) <= self.deadzone_px or hold_right is None:
-                # Within the dead-zone (or first reading): keep whatever
-                # direction we were already holding instead of flip-flopping
-                # on noise. Only a clear, unambiguous offset changes direction.
                 if hold_right is None:
                     hold_right = rng >= 0
             else:
                 hold_right = rng >= 0
             self.steer.set(hold_right)
-            # capture_ms is how long screenshotting+detection itself took, BEFORE
-            # the requested sleep. If this is close to (or bigger than) your
-            # --pulse-ms value, that's why lowering --pulse-ms has no visible
-            # effect: the loop is bottlenecked by screen capture, not the sleep.
             self.status.set(
                 "Direction",
                 f"{'>' if hold_right else '<'} (pulse {self.fixed_pulse_ms:.0f}ms, capture {capture_ms:.0f}ms)"
@@ -853,7 +908,7 @@ class FischMacro:
             if self.stop_event.is_set():
                 return
             rgb, left, top = self.searcher.grab(x_left, y_left, x_right, y_right)
-            fish_pos = self.searcher.match_in_frame(rgb, left, COLOR_FISH)
+            fish_pos = self.get_fish_center(rgb, left)
             if fish_pos is None:
                 break
 
@@ -881,7 +936,7 @@ class FischMacro:
                 while True:
                     if self.stop_event.is_set():
                         return
-                    fish_pos = self.search(minigame, COLOR_FISH)
+                    fish_pos = self.find_fish_pos(minigame)
                     rng = (fish_pos - original_pos) if fish_pos is not None else 0
                     hold = self.hold_formula(rng, roblox_w)
                     elapsed_ms = (time.time() - hold_timer) * 1000
@@ -905,8 +960,8 @@ class FischMacro:
                     if self.stop_event.is_set():
                         return
                     rgb, left, top = self.searcher.grab(*minigame)
-                    fish_pos = self.searcher.match_in_frame(rgb, left, COLOR_FISH)
-                    if fish_pos is None or self.searcher.match_in_frame(rgb, left, COLOR_WHITE) is not None:
+                    fish_pos = self.get_fish_center(rgb, left)
+                    if fish_pos is None:
                         break
                     if self.wait(minigame, 10):
                         continue_now = True
@@ -943,44 +998,42 @@ def resolve_exit_key(name):
 _UNSET = object()
 
 
-def load_macro_ini_settings(path):
+def load_macro_ini_settings(path, profile_name=None):
     """
-    Read an optional [Macro] section from Settings.ini, e.g.:
-
-        [Macro]
-        pulse-ms = 100
-        hold-scale = 0.6
-        deadzone-px = 8
-        shake-min-pixels = 20
-        steering = mouse
-        exit-key = f8
-        window-title = Sober
-
-    Returns a dict of raw string values keyed by the option name (dashes
-    preserved, case-insensitive). Missing file or missing section just
-    means "nothing configured" - not an error.
+    Read settings from Settings.ini and optionally merge profile_settings.json.
     """
-    cfg = configparser.ConfigParser()
+    cfg = configparser.ConfigParser(strict=False)
+    ini_dict = {}
     if Path(path).exists():
         cfg.read(path)
-    if not cfg.has_section("Macro"):
-        return {}
-    return {k: v for k, v in cfg.items("Macro")}
+        if cfg.has_section("Macro"):
+            ini_dict = {k: v for k, v in cfg.items("Macro")}
+
+    selected_profile = profile_name or ini_dict.get("profile")
+    if selected_profile:
+        prof_file = Path("Profiles") / selected_profile / "profile_settings.json"
+        if prof_file.exists():
+            try:
+                with open(prof_file, "r") as f:
+                    prof_data = json.load(f)
+                if "Macro" in prof_data and isinstance(prof_data["Macro"], dict):
+                    for k, v in prof_data["Macro"].items():
+                        ini_dict[k] = str(v)
+            except Exception as e:
+                print(f"Warning: Could not load profile {selected_profile}: {e}")
+
+    return ini_dict
 
 
 def resolve_setting(cli_value, ini_settings, ini_key, caster, hard_default, flag_name):
     """
-    Priority: explicit CLI flag > [Macro] value in Settings.ini > hardcoded
-    default. cli_value must be _UNSET when the flag wasn't passed on the
-    command line (see argparse defaults below). Both CLI and Settings.ini
-    values arrive as raw strings and go through the same caster, so a typo
-    in either place fails the same clear way.
+    Priority: explicit CLI flag > [Macro] value in Settings.ini / profile JSON > hardcoded default.
     """
     if cli_value is not _UNSET:
         raw, source = cli_value, flag_name
     else:
         raw = ini_settings.get(ini_key)
-        source = f"Settings.ini [Macro] {ini_key}"
+        source = f"Settings/Profile [Macro] {ini_key}"
         if raw is None or raw.strip() == "":
             return hard_default
     try:
@@ -989,64 +1042,37 @@ def resolve_setting(cli_value, ini_settings, ini_key, caster, hard_default, flag
         sys.exit(f"{source} = '{raw}' is invalid.")
 
 
-
-
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Fisch Cream's Macro - Python/Linux port")
+    parser.add_argument("--profile", default=_UNSET,
+                         help="Name of profile folder in Profiles/ to load settings from.")
     parser.add_argument("--window-title", default=_UNSET,
-                         help="Optional: substring of the game window title to match. "
-                              "If omitted (default), you'll be prompted to click on the "
-                              "game window instead (via `xdotool selectwindow`). Can also be "
-                              "set via Settings.ini [Macro] window-title.")
+                         help="Optional: substring of the game window title to match.")
     parser.add_argument("--settings", default="Settings.ini",
-                         help="Path to Settings.ini, used both for the Control fallback value "
-                              "and for the optional [Macro] section providing default values "
-                              "for the flags below (CLI flags always take priority).")
+                         help="Path to Settings.ini.")
     parser.add_argument("--exit-key", default=_UNSET,
-                         help="Key that stops the macro (default: f8). This is a SYSTEM-WIDE "
-                              "hotkey, not scoped to the game window, so avoid keys you press "
-                              "often elsewhere (e.g. 'space' is a bad choice - it's a common "
-                              "video/browser pause key and can stop the macro by accident). "
-                              "Can also be set via Settings.ini [Macro] exit-key.")
+                         help="Key that stops the macro (default: f8).")
     parser.add_argument("--shake-min-pixels", default=_UNSET,
-                         help="Minimum matched white pixels required before a shake-button "
-                              "detection counts (default: 12). Raise this if the macro gets "
-                              "'stuck' thinking it's shaking when it isn't (false positives "
-                              "from glare/UI); lower it if real shake buttons are being missed. "
-                              "Can also be set via Settings.ini [Macro] shake-min-pixels.")
+                         help="Minimum matched white pixels required before a shake-button detection counts (default: 12).")
     parser.add_argument("--hold-scale", default=_UNSET,
-                         help="Multiplier applied to every minigame hold duration (default: 1.0 "
-                              "= unchanged). On low-Control rods the bar can overshoot a narrow "
-                              "target zone even on the shortest possible pulse; try a smaller "
-                              "value like 0.6-0.8 to shorten pulses and reduce overshoot. This is "
-                              "experimental and may need tuning per rod. Ignored if --pulse-ms "
-                              "is set. Can also be set via Settings.ini [Macro] hold-scale.")
+                         help="Multiplier applied to every minigame hold duration (default: 1.0).")
     parser.add_argument("--pulse-ms", default=_UNSET,
-                         help="Bypass the variable hold-time formula entirely and always hold "
-                              "the steering input for this many milliseconds (e.g. 100). Useful "
-                              "when a rod's Control is so low the fish sits centered and the "
-                              "variable formula can't converge - fast, fixed-length pulses can "
-                              "spam faster than the formula allows. Overrides --hold-scale. "
-                              "Default: unset (use the variable formula). Can also be set via "
-                              "Settings.ini [Macro] pulse-ms.")
+                         help="Bypass variable formula and hold steering for this many ms.")
     parser.add_argument("--steering", choices=["mouse", "space"], default=_UNSET,
-                         help="Input used to steer the minigame bar (default: mouse). Real-world "
-                              "testing with a hardware autoclicker confirmed mouse works better "
-                              "than spacebar here, contrary to an earlier guess - this flag is "
-                              "kept in case that's worth revisiting. Can also be set via "
-                              "Settings.ini [Macro] steering.")
+                         help="Input used to steer minigame bar (default: mouse).")
     parser.add_argument("--deadzone-px", default=_UNSET,
-                         help="Fixed-pulse mode only: minimum fish-to-bar offset (in pixels) "
-                              "required before switching direction (default: 6). Prevents "
-                              "direction chattering ('going left and right' near center) from a "
-                              "naive bang-bang controller flipping on every pixel of noise. "
-                              "Raise it if it still chatters, lower it (even to 0) if it feels "
-                              "sluggish to correct. Can also be set via Settings.ini [Macro] "
-                              "deadzone-px.")
+                         help="Fixed-pulse mode minimum offset in pixels (default: 6).")
+    parser.add_argument("--color-ui", default=_UNSET,
+                         help="Custom COLOR_UI targets (e.g. '0xffdcac:10, 0x3d381b:10').")
+    parser.add_argument("--color-fish", default=_UNSET,
+                         help="Custom COLOR_FISH targets (e.g. '0x434b5b:3, 0x4a4a5c:4').")
+    parser.add_argument("--color-bar", default=_UNSET,
+                         help="Custom COLOR_BAR targets (e.g. '0x848587:4, 0x787773:4').")
     args = parser.parse_args()
 
-    ini_settings = load_macro_ini_settings(args.settings)
+    profile_name = args.profile if args.profile is not _UNSET else None
+    ini_settings = load_macro_ini_settings(args.settings, profile_name=profile_name)
 
     window_title = resolve_setting(args.window_title, ini_settings, "window-title", str, None, "--window-title")
     if window_title == "":
@@ -1059,6 +1085,14 @@ def main():
     if steering not in ("mouse", "space"):
         sys.exit(f"Settings.ini [Macro] steering = '{steering}' must be 'mouse' or 'space'.")
     deadzone_px = resolve_setting(args.deadzone_px, ini_settings, "deadzone-px", int, 6, "--deadzone-px")
+
+    color_ui_raw = resolve_setting(args.color_ui, ini_settings, "color-ui", str, None, "--color-ui")
+    color_fish_raw = resolve_setting(args.color_fish, ini_settings, "color-fish", str, None, "--color-fish")
+    color_bar_raw = resolve_setting(args.color_bar, ini_settings, "color-bar", str, None, "--color-bar")
+
+    color_ui = parse_color_dict(color_ui_raw, DEFAULT_COLOR_UI) if color_ui_raw else dict(DEFAULT_COLOR_UI)
+    color_fish = parse_color_dict(color_fish_raw, DEFAULT_COLOR_FISH) if color_fish_raw else dict(DEFAULT_COLOR_FISH)
+    color_bar = parse_color_dict(color_bar_raw, DEFAULT_COLOR_BAR) if color_bar_raw else dict(DEFAULT_COLOR_BAR)
 
     exit_key = resolve_exit_key(exit_key_name)
 
@@ -1073,7 +1107,8 @@ def main():
 
     macro = FischMacro(window_title=window_title, settings_path=args.settings, exit_key=exit_key,
                         shake_min_pixels=shake_min_pixels, hold_scale=hold_scale,
-                        fixed_pulse_ms=pulse_ms_raw, steering_input=steering)
+                        fixed_pulse_ms=pulse_ms_raw, steering_input=steering, deadzone_px=deadzone_px,
+                        color_ui=color_ui, color_fish=color_fish, color_bar=color_bar)
     try:
         macro.run()
     except KeyboardInterrupt:
