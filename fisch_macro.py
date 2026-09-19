@@ -40,6 +40,7 @@ import subprocess
 import sys
 import time
 import threading
+import signal
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event, Lock
@@ -154,20 +155,30 @@ def hex_to_rgb(h):
 class WindowError(Exception):
     pass
 
-
-def xdotool(*args):
-    result = subprocess.run(["xdotool", *args], capture_output=True, text=True)
-    if result.returncode != 0:
-        raise WindowError(result.stderr.strip() or f"xdotool {args} failed")
-    return result.stdout.strip()
-
-
 def find_window(title_substring):
-    out = xdotool("search", "--name", title_substring)
-    ids = [w for w in out.splitlines() if w.strip()]
-    if not ids:
+    out = subprocess.run(
+        ["ps", "-eo", "pid,comm,%cpu"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    matches = []
+
+    for line in out.stdout.splitlines()[1:]:
+        parts = line.split(None, 2)
+        if len(parts) != 3:
+            continue
+
+        pid, comm, cpu = parts
+
+        if title_substring.lower() in comm.lower():
+            matches.append((float(cpu), pid))
+
+    if not matches:
         raise WindowError(f"No window found matching '{title_substring}'")
-    return ids[0]
+
+    return max(matches)[1]
 
 
 def select_window_interactively():
@@ -617,7 +628,22 @@ class FischMacro:
         return self.searcher.find_color(*region, colors)
 
     def get_fish_center(self, rgb, left):
-        """Locate the exact center X position of the fish icon."""
+        """
+        Locate the exact center X position of the fish icon/target line.
+
+        Uses noise-filtered blob clustering (same machinery as the arrow/bar
+        detection) rather than a naive whole-frame centroid: the target's
+        color range produces scattered single-pixel false matches across
+        the dark track texture (confirmed against real screenshots), and
+        averaging ALL matching pixels in the frame lets a handful of distant
+        stray pixels drag the computed position off the real target even
+        when it hasn't moved - which looked exactly like unexplained
+        overshoot/chatter, including on rods that previously tracked fine.
+        """
+        runs = self.searcher.find_solid_bar_runs(rgb, left, self.color_fish, min_col_count=2, width_range=(1, 40))
+        if runs:
+            widest = max(runs, key=lambda r: r[1] - r[0])
+            return (widest[0] + widest[1]) / 2
         centroid = self.searcher.match_centroid_x_in_frame(rgb, left, self.color_fish, min_pixels=2)
         if centroid is not None:
             return centroid
@@ -707,13 +733,12 @@ class FischMacro:
                 rightmost = max(r[1] for r in runs)
                 width = rightmost - leftmost
                 # Lock in self.control from the real measured arrow spacing
-                # the first time we get a clean two-arrow reading. This is
-                # the reliable case (confirmed against real screenshots) -
-                # without this, self.control never gets set here at all for
-                # classic arrow-icon rods, since this branch only used to
-                # read self.control, never write it. That silently forced
-                # every arrow-rod session onto the much coarser Settings.ini
-                # fallback formula instead of the actual on-screen width.
+                # the first time we get a clean two-arrow reading. Without
+                # this, self.control never gets set here at all for classic
+                # arrow-icon rods (this branch only used to read it), which
+                # silently forced every arrow-rod session onto the much
+                # coarser Settings.ini fallback formula instead of the
+                # actual on-screen width.
                 if (not self.control or self.control <= 0) and width > 0:
                     self.control = width
                 return (leftmost + rightmost) / 2
@@ -737,12 +762,12 @@ class FischMacro:
             widest = max(bar_runs, key=lambda r: r[1] - r[0])
             min_x, max_x = widest
             w = max_x - min_x
-            # Only ever set self.control from this tier ONCE (while it's
-            # still unset/invalid). Once we have a real reading, freeze it -
-            # otherwise a per-rod constant would silently drift every frame
-            # based on whatever run happens to be widest that frame (e.g. an
-            # animated highlight segment on a rainbow bar), corrupting the
-            # dead-zone thresholds and hold-time scaling mid-catch.
+            # Only ever set self.control from this tier ONCE (while still
+            # unset/invalid), then freeze it - otherwise a per-rod constant
+            # would silently drift every frame based on whatever run happens
+            # to be widest that frame (e.g. an animated highlight segment on
+            # a rainbow bar), corrupting dead-zone thresholds and hold-time
+            # scaling mid-catch.
             if (not self.control or self.control <= 0) and 15 <= w <= round((x_right - x_left) * 0.85):
                 self.control = w
             return (min_x + max_x) / 2
@@ -893,11 +918,29 @@ class FischMacro:
             else:
                 hold_right = rng >= 0
             self.steer.set(hold_right)
+
+            # Taper the pulse length down as the offset shrinks, instead of
+            # always firing a full-strength pulse regardless of how close
+            # the fish already is. A constant full-length pulse is a classic
+            # bang-bang limit cycle: once close to centered, a full pulse is
+            # often MORE correction than needed, so it overshoots, then
+            # overshoots back next cycle, forever - this is what "overshoots
+            # when it's in the same spot" / "keeps spamming" was. On a
+            # narrow box (small self.control), a full pulse can also move
+            # the reticle clean past the target instead of landing on it.
+            # Near-target zone = up to ~3x the dead-zone width; taper
+            # linearly from 25% pulse length at the dead-zone edge up to
+            # 100% pulse length at 3x the dead-zone (and beyond).
+            near_zone = max(self.deadzone_px * 3, 1)
+            offset = min(abs(rng), near_zone)
+            taper = 0.25 + 0.75 * (offset / near_zone)
+            this_pulse_s = pulse_s * taper
+
             self.status.set(
                 "Direction",
-                f"{'>' if hold_right else '<'} (pulse {self.fixed_pulse_ms:.0f}ms, capture {capture_ms:.0f}ms)"
+                f"{'>' if hold_right else '<'} (pulse {this_pulse_s*1000:.0f}/{self.fixed_pulse_ms:.0f}ms, capture {capture_ms:.0f}ms)"
             )
-            time.sleep(pulse_s)
+            time.sleep(this_pulse_s)
 
         self.steer.set(False)
 
@@ -1042,7 +1085,38 @@ def resolve_setting(cli_value, ini_settings, ini_key, caster, hard_default, flag
         sys.exit(f"{source} = '{raw}' is invalid.")
 
 
+def _release_input_and_exit(signum, frame):
+    """
+    SIGTERM handler. subprocess.terminate() (e.g. the GUI's Stop button)
+    sends SIGTERM, and Python's default behavior for SIGTERM kills the
+    process immediately WITHOUT running cleanup code - no finally blocks,
+    no atexit handlers. That left the OS-level mouse button (or the space
+    key, in --steering space mode) physically stuck "held down" whenever
+    the macro was stopped mid-hold, which is most of the time since holding
+    is literally what steering does. The next run (or manual clicking)
+    would then fight against that stuck input state, producing exactly the
+    kind of unexplained wrong-position/erratic behavior this was mistaken
+    for a detection bug.
+
+    Force-release both possible held inputs directly and unconditionally
+    here, regardless of internal _down state tracking, since we can't be
+    sure what's actually held at the moment the signal arrives - releasing
+    something that isn't actually held is harmless.
+    """
+    try:
+        pyautogui.mouseUp()
+    except Exception:
+        pass
+    try:
+        pyautogui.keyUp("space")
+    except Exception:
+        pass
+    sys.exit(0)
+
+
 def main():
+    signal.signal(signal.SIGTERM, _release_input_and_exit)
+
     import argparse
     parser = argparse.ArgumentParser(description="Fisch Cream's Macro - Python/Linux port")
     parser.add_argument("--profile", default=_UNSET,
@@ -1117,3 +1191,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
