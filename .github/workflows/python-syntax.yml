@@ -17,5 +17,5 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Check fisch-macro.py syntax
-        run: python -m py_compile fisch-macro.py
+      - name: Check Python syntax
+        run: python -m py_compile fisch_macro.py
