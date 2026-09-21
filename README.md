@@ -1,3 +1,5 @@
+# PROJECT ARCHIVED
+The project will not receive updates, because I got banned in Fisch. I sent an appeal, for now the project will remain archived until further updates. More details in the discord server
 <h3>
 <p align='center'>
 <img src="https://github.com/Patryk55o/FischMacroLinux/blob/main/FischLinuxLOGO2.svg">
